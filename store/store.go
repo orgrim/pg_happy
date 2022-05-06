@@ -26,10 +26,15 @@ type Store struct {
 	decoder     *json.Decoder
 }
 
-func NewStore(path string) (*Store, error) {
+func NewStore(path string, truncate bool) (*Store, error) {
 	s := Store{Path: path}
 
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	flags := os.O_RDWR | os.O_CREATE
+	if truncate {
+		flags = flags | os.O_TRUNC
+	}
+
+	f, err := os.OpenFile(path, flags, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("could not open file: %w", err)
 	}

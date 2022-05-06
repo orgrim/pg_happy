@@ -32,13 +32,7 @@ func (d *DB) CloseWithTimeout(ctx context.Context, timeout time.Duration) error 
 	return d.Conn.Close(closeCtx)
 }
 
-func CreateSchema(ctx context.Context, d *DB) error {
-	sqlCommands := []string{
-		"create schema if not exists happy",
-		"create table if not exists happy.stamps ( id int primary key, ts timestamptz not null )",
-		"create unlogged table if not exists happy.store ( id int primary key, ts timestamptz not null )",
-	}
-
+func runXact(ctx context.Context, d *DB, sqlCommands []string) error {
 	tx, err := d.Conn.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
@@ -63,6 +57,25 @@ func CreateSchema(ctx context.Context, d *DB) error {
 	}
 
 	return nil
+}
+
+func CreateSchema(ctx context.Context, d *DB) error {
+	sqlCommands := []string{
+		"create schema if not exists happy",
+		"create table if not exists happy.stamps ( id int primary key, ts timestamptz not null )",
+		"create unlogged table if not exists happy.store ( id int primary key, ts timestamptz not null )",
+	}
+
+	return runXact(ctx, d, sqlCommands)
+}
+
+func TruncateTables(ctx context.Context, d *DB) error {
+	sqlCommands := []string{
+		"truncate happy.stamps",
+		"truncate happy.store",
+	}
+
+	return runXact(ctx, d, sqlCommands)
 }
 
 func InsertData(ctx context.Context, d *DB, timeout time.Duration, id int, ts time.Time) error {

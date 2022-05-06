@@ -20,8 +20,9 @@ var (
 	LocalStore string
 
 	// Load options
-	Timeout string
-	Pause   string
+	Timeout  string
+	Pause    string
+	Truncate bool
 
 	// Compare options
 	NoLoad bool
@@ -67,6 +68,7 @@ func init() {
 
 	loadCmd.Flags().StringVarP(&Timeout, "timeout", "t", "5s", "timeout when interacting with PostgreSQL")
 	loadCmd.Flags().StringVarP(&Pause, "pause", "p", "500ms", "pause between transactions")
+	loadCmd.Flags().BoolVarP(&Truncate, "truncate", "T", false, "truncate tables and files before sending data")
 
 	compareCmd.Flags().BoolVarP(&NoLoad, "no-load", "n", false, "do not load local file to database")
 }
@@ -121,7 +123,7 @@ func loadDB(cmd *cobra.Command, args []string) error {
 		connected bool
 	)
 
-	st, err := store.NewStore(LocalStore)
+	st, err := store.NewStore(LocalStore, Truncate)
 	if err != nil {
 		return err
 	}
@@ -150,13 +152,27 @@ func loadDB(cmd *cobra.Command, args []string) error {
 		if id == 0 {
 			var err error
 
-			log.Println("getting next id")
 			ctx, cancel := context.WithTimeout(baseCtx, timeout)
-			id, err = pg.GetNextId(ctx, db)
-			cancel()
-			if err != nil {
-				log.Printf("could not get next id: %s", err)
 
+			if Truncate {
+				log.Println("truncating tables")
+				err = pg.TruncateTables(ctx, db)
+				cancel()
+				if err != nil {
+					log.Printf("could not truncate tables: %s\n", err)
+				}
+
+				id = 1
+			} else {
+				log.Println("getting next id")
+				id, err = pg.GetNextId(ctx, db)
+				cancel()
+				if err != nil {
+					log.Printf("could not get next id: %s", err)
+				}
+			}
+
+			if err != nil {
 				if db.Conn.IsClosed() {
 					connected = false
 				}
@@ -179,7 +195,7 @@ func loadDB(cmd *cobra.Command, args []string) error {
 		log.Printf("insert data: id=%d\n", id)
 		err := pg.InsertData(baseCtx, db, timeout, id, ts)
 		if err != nil {
-			log.Printf("could not insert data: %s", err)
+			log.Printf("could not insert: %s", err)
 		}
 
 		// Force reconnection
@@ -199,7 +215,7 @@ func compareDB(cmd *cobra.Command, args []string) error {
 	baseCtx := context.Background()
 	timeout := 5 * time.Second
 
-	st, err := store.NewStore(LocalStore)
+	st, err := store.NewStore(LocalStore, false)
 	if err != nil {
 		return err
 	}
