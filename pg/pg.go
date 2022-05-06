@@ -93,8 +93,8 @@ func InsertData(ctx context.Context, d *DB, timeout time.Duration, id int, ts ti
 		werr := fmt.Errorf("query failed: %w", err)
 
 		if insCtx.Err() == nil {
-			insCtx, cancel := context.WithTimeout(ctx, timeout)
-			cerr := tx.Rollback(insCtx)
+			rbCtx, cancel := context.WithTimeout(ctx, timeout)
+			cerr := tx.Rollback(rbCtx)
 			cancel()
 			if cerr != nil {
 				return fmt.Errorf("xact rollback failed: %w and %s: %w", cerr, werr)
