@@ -1,9 +1,10 @@
 PROG=pg_happy
 LDFLAGS=-ldflags="-s -w"
+SRCS=$(shell find . -name '*.go' -type f)
 
 all: $(PROG)
 
-$(PROG): *.go
+$(PROG): $(SRCS)
 	CGO_ENABLED=0 go build $(LDFLAGS) .
 
 install: $(PROG)
