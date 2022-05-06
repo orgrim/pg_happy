@@ -195,7 +195,7 @@ func loadDB(cmd *cobra.Command, args []string) error {
 		log.Printf("insert data: id=%d\n", id)
 		err := pg.InsertData(baseCtx, db, timeout, id, ts)
 		if err != nil {
-			log.Printf("could not insert: %s", err)
+			log.Printf("could not insert (%v, %v): %s", id, ts, err)
 		}
 
 		// Force reconnection
