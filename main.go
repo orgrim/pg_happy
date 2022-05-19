@@ -13,6 +13,7 @@ import (
 func main() {
 	ctx := context.Background()
 
+	// run the command line parsing and execution
 	if err := cmd.Execute(ctx); err != nil {
 		os.Exit(1)
 	}

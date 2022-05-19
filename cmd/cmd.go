@@ -11,6 +11,9 @@ import (
 	"github.com/orgrim/pg_happy/store"
 	"github.com/spf13/cobra"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -79,7 +82,7 @@ func Execute(ctx context.Context) error {
 }
 
 func initDB(cmd *cobra.Command, args []string) error {
-	baseCtx := context.Background()
+	baseCtx := cmd.Context()
 	ctx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
 
 	// connect
@@ -115,7 +118,11 @@ func loadDB(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid pause value: %w", err)
 	}
 
-	baseCtx := context.Background()
+	baseCtx, baseCancel := context.WithCancel(cmd.Context())
+
+	// Setup
+	sigC := make(chan os.Signal, 1)
+	signal.Notify(sigC, syscall.SIGINT, syscall.SIGTERM)
 
 	var (
 		db        *pg.DB
@@ -128,7 +135,17 @@ func loadDB(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+mainLoop:
 	for {
+		// end the loop if requested
+		select {
+		case sig := <-sigC:
+			log.Printf("received signal %s, exiting", sig)
+			baseCancel()
+			break mainLoop
+		default:
+		}
+
 		// get a connection
 		if !connected {
 			var err error
@@ -136,9 +153,13 @@ func loadDB(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(baseCtx, timeout)
 			log.Println("connecting to PostgreSQL")
 			db, err = pg.NewDB(ctx, ConnString)
-			cancel()
 			if err != nil {
+				if ctx.Err() == context.Canceled {
+					return nil
+				}
+
 				log.Printf("could not connect: %s", err)
+				cancel()
 				time.Sleep(pause)
 				continue
 			}
@@ -212,7 +233,7 @@ func loadDB(cmd *cobra.Command, args []string) error {
 }
 
 func compareDB(cmd *cobra.Command, args []string) error {
-	baseCtx := context.Background()
+	baseCtx := cmd.Context()
 	timeout := 5 * time.Second
 
 	st, err := store.NewStore(LocalStore, false)
