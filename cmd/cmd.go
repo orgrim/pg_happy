@@ -11,6 +11,7 @@ import (
 	"github.com/orgrim/pg_happy/store"
 	"github.com/spf13/cobra"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,6 +27,7 @@ var (
 	Timeout  string
 	Pause    string
 	Truncate bool
+	Size     int
 
 	// Compare options
 	NoLoad bool
@@ -72,6 +74,7 @@ func init() {
 	loadCmd.Flags().StringVarP(&Timeout, "timeout", "t", "5s", "timeout when interacting with PostgreSQL")
 	loadCmd.Flags().StringVarP(&Pause, "pause", "p", "500ms", "pause between transactions")
 	loadCmd.Flags().BoolVarP(&Truncate, "truncate", "T", false, "truncate tables and files before sending data")
+	loadCmd.Flags().IntVarP(&Size, "size", "S", 10, "payload size in bytes")
 
 	compareCmd.Flags().BoolVarP(&NoLoad, "no-load", "n", false, "do not load local file to database")
 }
@@ -120,6 +123,10 @@ func loadDB(cmd *cobra.Command, args []string) error {
 
 	baseCtx, baseCancel := context.WithCancel(cmd.Context())
 
+	if Size <= 0 {
+		return fmt.Errorf("invalid size for payload: too small")
+	}
+
 	// Setup
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC, syscall.SIGINT, syscall.SIGTERM)
@@ -133,6 +140,15 @@ func loadDB(cmd *cobra.Command, args []string) error {
 	st, err := store.NewStore(LocalStore, Truncate)
 	if err != nil {
 		return err
+	}
+
+	log.Println("generating random payload")
+	payload := make([]byte, Size)
+	for i := 0; i < Size; i++ {
+		// generate a number between 32 and 126, the ascii visible
+		// characters
+		c := (rand.Uint32() & 94) + 32
+		payload[i] = byte(c)
 	}
 
 mainLoop:
@@ -214,7 +230,7 @@ mainLoop:
 
 		// insert the same data into the database
 		log.Printf("insert data: id=%d\n", id)
-		err := pg.InsertData(baseCtx, db, timeout, id, ts)
+		err := pg.InsertData(baseCtx, db, timeout, id, ts, string(payload))
 		if err != nil {
 			log.Printf("could not insert (%v, %v): %s", id, ts, err)
 		}

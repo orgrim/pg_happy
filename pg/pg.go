@@ -62,7 +62,7 @@ func runXact(ctx context.Context, d *DB, sqlCommands []string) error {
 func CreateSchema(ctx context.Context, d *DB) error {
 	sqlCommands := []string{
 		"create schema if not exists happy",
-		"create table if not exists happy.stamps ( id int primary key, ts timestamptz not null )",
+		"create table if not exists happy.stamps ( id int primary key, ts timestamptz not null, payload text )",
 		"create unlogged table if not exists happy.store ( id int primary key, ts timestamptz not null )",
 	}
 
@@ -78,7 +78,7 @@ func TruncateTables(ctx context.Context, d *DB) error {
 	return runXact(ctx, d, sqlCommands)
 }
 
-func InsertData(ctx context.Context, d *DB, timeout time.Duration, id int, ts time.Time) error {
+func InsertData(ctx context.Context, d *DB, timeout time.Duration, id int, ts time.Time, payload string) error {
 	insCtx, cancel := context.WithTimeout(ctx, timeout)
 	tx, err := d.Conn.Begin(insCtx)
 	cancel()
@@ -87,7 +87,7 @@ func InsertData(ctx context.Context, d *DB, timeout time.Duration, id int, ts ti
 	}
 
 	insCtx, cancel = context.WithTimeout(ctx, timeout)
-	_, err = tx.Exec(insCtx, "insert into happy.stamps (id, ts) values ($1, $2)", id, ts)
+	_, err = tx.Exec(insCtx, "insert into happy.stamps (id, ts, payload) values ($1, $2, $3)", id, ts, payload)
 	cancel()
 	if err != nil {
 		werr := fmt.Errorf("query failed: %w", err)
